@@ -9,6 +9,7 @@ import lombok.NoArgsConstructor;
 import java.sql.Date;
 import java.sql.Time;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.List;
 
@@ -16,7 +17,7 @@ import java.util.List;
 @Table
 @Data
 @NoArgsConstructor
-@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
+@JsonIgnoreProperties({"hibernateEagerInitializer", "handler"})
 public class Users {
 
     public Users(String first_name, String last_name, String phoneNumber, String email, String password)  {
@@ -29,6 +30,10 @@ public class Users {
         this.role = "user";
         this.password = password;
         this.isBanned = false;
+        this.cars = new ArrayList<>();
+        this.reviews = new ArrayList<>();
+        this.transactions = new ArrayList<>();
+        this.bookingLots = new ArrayList<>();
     }
 
     @Id
@@ -57,6 +62,7 @@ public class Users {
     private boolean isBanned;
 
     @OneToMany
+    @JsonIgnore
     private List<Cars> cars;
 
     @OneToMany
@@ -65,7 +71,7 @@ public class Users {
     @OneToOne
     @Transient
     @JsonIgnore
-    private Transactions transactions;
+    private List<Transactions> transactions;
 
     @OneToMany
     private List<Booking> bookingLots;

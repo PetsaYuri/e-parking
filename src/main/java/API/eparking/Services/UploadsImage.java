@@ -22,6 +22,10 @@ public class UploadsImage {
     }
 
     public String createUUIDFilename(String originalFilename)  {
-        return UUID.randomUUID().toString() + "." + originalFilename.split("\\.", 2)[1];
+        try {
+            return UUID.randomUUID().toString() + "." + originalFilename.split("\\.", 2)[1];
+        } catch (IndexOutOfBoundsException ex)  {
+            return UUID.randomUUID().toString() + ".jpg";
+        }
     }
 }

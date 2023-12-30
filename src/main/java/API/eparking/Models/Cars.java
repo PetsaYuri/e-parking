@@ -1,6 +1,7 @@
 package API.eparking.Models;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -10,6 +11,7 @@ import lombok.ToString;
 @Table
 @Data
 @NoArgsConstructor
+@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
 public class Cars {
 
     public Cars(String numbers, String color, char type, Users user)    {
@@ -34,7 +36,6 @@ public class Cars {
 
     @ManyToOne
     @JsonIgnore
-    @ToString.Exclude
     private Users user;
 
     @OneToOne

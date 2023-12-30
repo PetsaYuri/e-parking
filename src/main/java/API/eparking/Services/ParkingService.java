@@ -1,5 +1,6 @@
 package API.eparking.Services;
 
+import API.eparking.DTO.ParkingDTO;
 import API.eparking.Exceptions.PromoCodes.PromoCodeExpiredException;
 import API.eparking.Exceptions.PromoCodes.PromoCodeNotExistsException;
 import API.eparking.Exceptions.PromoCodes.PromoCodeWasUsedException;
@@ -40,6 +41,12 @@ public class ParkingService {
         this.promocodesService = promocodesService;
         this.transactionsService = transactionsService;
         this.bookingService = bookingService;
+    }
+
+    public ParkingDTO getById(Long id)  {
+        Parking parkingLot = parkingRepository.getReferenceById(id);
+        return new ParkingDTO(parkingLot.getPricePerDay(), parkingLot.getPricePerHour(), parkingLot.getBusy_days(), parkingLot.getBusy_hours(), parkingLot.getIsAvailable(),
+                parkingLot.getIsBooking(), parkingLot.getBusyStart(), parkingLot.getBusyEnd(), parkingLot.getPromocode(), parkingLot.getCar(), parkingLot.getBookingLot());
     }
 
     public Boolean setPricePerHour(int value) {
@@ -96,8 +103,13 @@ public class ParkingService {
         return parkingRepository.getReferenceById(id);
     }
 
-    public List<Parking> getAllParkingLots(String sort)    {
-        return sort == null ? parkingRepository.findAll(Sort.by("id")) : parkingRepository.findByIsAvailable(Boolean.valueOf(sort));
+    public List<ParkingDTO> getAllParkingLots(String sort)    {
+        return sort == null ? parkingRepository.findAll(Sort.by("id")).stream().map(parking ->
+            new ParkingDTO(parking.getPricePerDay(), parking.getPricePerHour(), parking.getBusy_days(), parking.getBusy_hours(), parking.getIsAvailable(), parking.getIsBooking(),
+                    parking.getBusyStart(), parking.getBusyEnd(), parking.getPromocode(), parking.getCar(), parking.getBookingLot())).toList()
+                : parkingRepository.findByIsAvailable(Boolean.valueOf(sort)).stream().map(parking ->
+                new ParkingDTO(parking.getPricePerDay(), parking.getPricePerHour(), parking.getBusy_days(), parking.getBusy_hours(), parking.getIsAvailable(), parking.getIsBooking(),
+                        parking.getBusyStart(), parking.getBusyEnd(), parking.getPromocode(), parking.getCar(), parking.getBookingLot())).toList();
     }
 
     public Boolean create()    {
@@ -156,17 +168,20 @@ public class ParkingService {
         return true;
     }
 
-    public Parking editPrice(Parking parking, Parking updatedParking) {
-        if (!Double.toString(updatedParking.getPricePerHour()).isEmpty() && updatedParking.getPricePerHour() != parking.getPricePerHour()
-                && updatedParking.getPricePerHour() != 0)    {
-            parking.setPricePerHour(updatedParking.getPricePerHour());
+    public ParkingDTO editPrice(Long id, ParkingDTO updatedParking) {
+        Parking parking = parkingRepository.getReferenceById(id);
+        if (!Double.toString(updatedParking.price_per_hour()).isEmpty() && updatedParking.price_per_hour() != parking.getPricePerHour()
+                && updatedParking.price_per_hour() != 0)    {
+            parking.setPricePerHour(updatedParking.price_per_hour());
         }
 
-        if (!Double.toString(updatedParking.getPricePerDay()).isEmpty() && updatedParking.getPricePerDay() != parking.getPricePerDay()
-                && updatedParking.getPricePerDay() != 0)    {
-            parking.setPricePerDay(updatedParking.getPricePerDay());
+        if (!Double.toString(updatedParking.price_per_day()).isEmpty() && updatedParking.price_per_day() != parking.getPricePerDay()
+                && updatedParking.price_per_day() != 0)    {
+            parking.setPricePerDay(updatedParking.price_per_day());
         }
-        return parkingRepository.save(parking);
+        parkingRepository.save(parking);
+        return new ParkingDTO(parking.getPricePerDay(), parking.getPricePerHour(), parking.getBusy_days(), parking.getBusy_hours(), parking.getIsAvailable(), parking.getIsBooking(),
+                parking.getBusyStart(), parking.getBusyEnd(), parking.getPromocode(), parking.getCar(), parking.getBookingLot());
     }
 
     public long setEnd(int days, int hours)    {
@@ -176,7 +191,9 @@ public class ParkingService {
         return calendar.getTime().getTime();
     }
 
-    public Parking rentParkingLot(Parking parkingLot, Cars car, Parking busyParkingLot)    {
+    public ParkingDTO rentParkingLot(Long parkingLotId, Long carId, ParkingDTO busyParkingLot)    {
+        Parking parkingLot = parkingRepository.getReferenceById(parkingLotId);
+        Cars car = carsService.findCarById(carId);
 
         if(parkingLot.getIsBooking())   {
 
@@ -186,45 +203,49 @@ public class ParkingService {
         boolean setTimer = false;
         Transactions transaction = null;
         if (parkingLot.getIsAvailable() && car != null
-                && (busyParkingLot.getBusy_days() > 0 || busyParkingLot.getBusy_hours() > 0)) {
+                && (busyParkingLot.busy_days() > 0 || busyParkingLot.busy_hours() > 0)) {
             parkingLot.setCar(car);
             carsService.setParkingLotToCar(car, parkingLot);
             parkingLot.setIsAvailable(false);
-            parkingLot.setBusy_days(busyParkingLot.getBusy_days());
-            parkingLot.setBusy_hours(busyParkingLot.getBusy_hours());
+            parkingLot.setBusy_days(busyParkingLot.busy_days());
+            parkingLot.setBusy_hours(busyParkingLot.busy_hours());
             parkingLot.setBusyStart(Timestamp.from(Calendar.getInstance().toInstant()));
-            parkingLot.setBusyEnd(new Timestamp(setEnd(busyParkingLot.getBusy_days(), busyParkingLot.getBusy_hours())));
+            parkingLot.setBusyEnd(new Timestamp(setEnd(busyParkingLot.busy_days(), busyParkingLot.busy_hours())));
             setTimer = true;
 
             transaction = transactionsService.writeTransaction(parkingLot, car);
         }
         Parking savedParking = parkingRepository.save(parkingLot);
         if (setTimer)   {
-            setTimer(busyParkingLot.getBusy_hours(), busyParkingLot.getBusy_hours(), savedParking);
+            setTimer(busyParkingLot.busy_days(), busyParkingLot.busy_hours(), savedParking);
         }
 
         boolean transactionSaved = transactionsService.saveTransaction(transaction);
         if (!transactionSaved)  {
             System.out.println("Transaction with parking id \"" + parkingLot.getId() + "\" not written");
         }
-        return savedParking;
+        return new ParkingDTO(savedParking.getPricePerDay(), savedParking.getPricePerHour(), savedParking.getBusy_days(),
+                savedParking.getBusy_hours(), savedParking.getIsAvailable(), savedParking.getIsBooking(), savedParking.getBusyStart(),
+                savedParking.getBusyEnd(), parkingLot.getPromocode(), savedParking.getCar(), savedParking.getBookingLot());
     }
 
-    public Parking rentParkingLot(Parking parkingLot, Cars car, Parking busyParkingLot, String namePromocode)
+    public ParkingDTO rentParkingLot(Long parkingLotId, Long carId, ParkingDTO busyParkingLot, String namePromocode)
             throws PromoCodeNotExistsException, PromoCodeWasUsedException, PromoCodeExpiredException {
         checkBusyParking();
-        PromoCodes promoCode = promocodesService.getPromocode(namePromocode);
+        Parking parkingLot = parkingRepository.getReferenceById(parkingLotId);
+        Cars car = carsService.findCarById(carId);
+        PromoCodes promoCode = promocodesService.getByTitle(namePromocode);
+
         boolean setTimer = false;
         Transactions transaction = null;
 
-        if (parkingLot.getIsAvailable() && car != null && (busyParkingLot.getBusy_days() > 0 || busyParkingLot.getBusy_hours() > 0) && car.getParking() == null) {
+        if (parkingLot.getIsAvailable() && car != null && (busyParkingLot.busy_days() > 0 || busyParkingLot.busy_hours() > 0) && car.getParking() == null) {
             parkingLot.setCar(car);
-            carsService.setParkingLotToCar(car, parkingLot);
             parkingLot.setIsAvailable(false);
-            parkingLot.setBusy_days(busyParkingLot.getBusy_days());
-            parkingLot.setBusy_hours(busyParkingLot.getBusy_hours());
+            parkingLot.setBusy_days(busyParkingLot.busy_days());
+            parkingLot.setBusy_hours(busyParkingLot.busy_hours());
             parkingLot.setBusyStart(Timestamp.from(Calendar.getInstance().toInstant()));
-            parkingLot.setBusyEnd(new Timestamp(setEnd(busyParkingLot.getBusy_days(), busyParkingLot.getBusy_hours())));
+            parkingLot.setBusyEnd(new Timestamp(setEnd(busyParkingLot.busy_days(), busyParkingLot.busy_hours())));
             //promoCode
             if (promoCode != null) {
                 if (promoCode.getCount() > 0) {
@@ -242,19 +263,23 @@ public class ParkingService {
             }
             setTimer = true;
         }
+        carsService.setParkingLotToCar(car, parkingLot);
         Parking savedParking = parkingRepository.save(parkingLot);
         if (setTimer)   {
-            setTimer(busyParkingLot.getBusy_hours(), busyParkingLot.getBusy_hours(), savedParking);
+            setTimer(busyParkingLot.busy_hours(), busyParkingLot.busy_days(), savedParking);
         }
 
         boolean transactionSaved = transactionsService.saveTransaction(transaction);
         if (!transactionSaved) {
             System.out.println("Transaction with parking id \"" + parkingLot.getId() + "\" not written");
         }
-        return savedParking;
+        return new ParkingDTO(savedParking.getPricePerDay(), savedParking.getPricePerHour(), savedParking.getBusy_days(),
+                savedParking.getBusy_hours(), savedParking.getIsAvailable(), savedParking.getIsBooking(), savedParking.getBusyStart(),
+                savedParking.getBusyEnd(), parkingLot.getPromocode(), savedParking.getCar(), savedParking.getBookingLot());
     }
 
-    public Parking clearParkingLot(Parking parking)  {
+    public ParkingDTO clearParkingLot(Long id)  {
+        Parking parking = parkingRepository.getReferenceById(id);
         if (parking.getCar() != null)   {
             carsService.deleteParkingLot(parking.getCar());
             parking.setCar(null);
@@ -266,9 +291,12 @@ public class ParkingService {
             parking.setBusy_hours(0);
             parking.setBusy_days(0);
             parking.setPromocode(null);
-            return parkingRepository.save(parking);
+            parkingRepository.save(parking);
+            return new ParkingDTO(parking.getPricePerDay(), parking.getPricePerHour(), parking.getBusy_days(), parking.getBusy_hours(),
+                    parking.getIsAvailable(), parking.getIsBooking(), parking.getBusyStart(), parking.getBusyEnd(), parking.getPromocode(), parking.getCar(), parking.getBookingLot());
         }
-        return parking;
+        return new ParkingDTO(parking.getPricePerDay(), parking.getPricePerHour(), parking.getBusy_days(), parking.getBusy_hours(),
+                parking.getIsAvailable(), parking.getIsBooking(), parking.getBusyStart(), parking.getBusyEnd(), parking.getPromocode(), null, parking.getBookingLot());
     }
 
     public void checkBusyParking()  {
@@ -283,7 +311,7 @@ public class ParkingService {
             deleteUselessBookings(parking, listToDelete);
 
             if (Timestamp.from(Calendar.getInstance().toInstant()).after(parking.getBusyEnd()))  {
-                clearParkingLot(parking);
+                clearParkingLot(parking.getId());
             }
         }
     }
@@ -316,7 +344,7 @@ public class ParkingService {
 
         @Override
         public void run() {
-            clearParkingLot(busyParkingLot);
+            clearParkingLot(busyParkingLot.getId());
         }
     }
 

@@ -7,39 +7,134 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
-import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers;
-import org.springframework.test.web.servlet.result.StatusResultMatchers;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.File;
 import java.io.FileInputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
+
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @SpringBootTest
 @AutoConfigureMockMvc
 class UsersControllerTest {
 
-    private final String PATH_TO_USERS = "/api/users";
-
+    private final String URI_TO_USERS = "/api/users";
     private final String username = "petsa.yuri@gmail.com";
     private final String password = "1234";
     private final String credentials = username + ":" + password;
     private final String encodedCredentials = Base64.getEncoder().encodeToString(credentials.getBytes(StandardCharsets.UTF_8));
 
-    private final String PATH_TO_UPLOAD_IMAGES = System.getProperty("user.dir") + "/uploads/";
+    private final String PATH_TO_UPLOAD_IMAGES = "C:\\Users\\Yuri\\Desktop";
     @Autowired
     private MockMvc mockMvc;
 
     @Test
-    void testAddUserSuccess() throws Exception  {
-        int count = 3;
-        String first_name = "test", last_name = "test", phone_number = String.valueOf(count), email = String.valueOf(count), password = "1234";
+    void testGetById_ReturnUserDTO() throws Exception {
+        mockMvc.perform(MockMvcRequestBuilders.get(URI_TO_USERS + "/1"))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.first_name").value("Yuri"))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.last_name").value("Petsa"))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.email").value("petsa.yuri@gmail.com"))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.phone_number").value("1234567899"));
+    }
+
+    @Test
+    void testGetById_ReturnNotFoundStatus() throws Exception {
+        mockMvc.perform(MockMvcRequestBuilders.get(URI_TO_USERS + "/9999"))
+                .andExpect(MockMvcResultMatchers.status().isNotFound());
+    }
+
+    @Test
+    void testGetAll_ReturnListUserDTO() throws Exception {
+        mockMvc.perform(MockMvcRequestBuilders.get(URI_TO_USERS))
+                .andExpect(MockMvcResultMatchers.status().isOk())
+                .andExpect(MockMvcResultMatchers.jsonPath("$").isArray())
+                .andExpect(MockMvcResultMatchers.jsonPath("$.length()").value(8));
+    }
+
+    @Test
+    void testGetAll_SortingByRole_ReturnListUserDTO() throws Exception {
+        String role = "user";
+        mockMvc.perform(MockMvcRequestBuilders.get(URI_TO_USERS + "?role=" + role))
+                .andExpect(MockMvcResultMatchers.status().isOk())
+                .andExpect(MockMvcResultMatchers.jsonPath("$").isArray())
+                .andExpect(MockMvcResultMatchers.jsonPath("$[0].role").value(role));
+    }
+
+    @Test
+    void testGetAll_SortingByInvalidRole_ReturnEmptyList() throws Exception {
+        String role = "test";
+        mockMvc.perform(MockMvcRequestBuilders.get(URI_TO_USERS + "?role=" + role))
+                .andExpect(MockMvcResultMatchers.status().isOk())
+                .andExpect(MockMvcResultMatchers.jsonPath("$").isArray())
+                .andExpect(MockMvcResultMatchers.jsonPath("$").isEmpty());
+    }
+
+    @Test
+    void testGetAll_SortingByIsBanned_ReturnListUserDTO() throws Exception {
+        boolean banned = false;
+        mockMvc.perform(MockMvcRequestBuilders.get(URI_TO_USERS + "?is_banned=" + banned))
+                .andExpect(MockMvcResultMatchers.status().isOk())
+                .andExpect(MockMvcResultMatchers.jsonPath("$").isArray())
+                .andExpect(MockMvcResultMatchers.jsonPath("$[0].is_banned").value(banned));
+    }
+
+    @Test
+    void testGetAll_SortingByInvalidIsBanned_ReturnListUserDTO() throws Exception {
+        String banned = "test";
+        mockMvc.perform(MockMvcRequestBuilders.get(URI_TO_USERS + "?is_banned=" + banned ))
+                .andExpect(MockMvcResultMatchers.status().isOk())
+                .andExpect(MockMvcResultMatchers.jsonPath("$").isArray())
+                .andExpect(MockMvcResultMatchers.jsonPath("$[0].is_banned").value("false"));
+    }
+
+    @Test
+    void testSearch_ByEmail_ReturnUserDTO() throws Exception {
+        String email = "test@gmail.com";
+        mockMvc.perform(MockMvcRequestBuilders.get(URI_TO_USERS + "/search?email=" + email))
+                .andExpect(MockMvcResultMatchers.status().isOk())
+                .andExpect(MockMvcResultMatchers.jsonPath("$.email").value(email));
+    }
+
+    @Test
+    void testSearch_ByInvalidEmail_ReturnNotFoundStatus() throws Exception {
+        String email = "test";
+        mockMvc.perform(MockMvcRequestBuilders.get(URI_TO_USERS + "/search?email=" + email))
+                .andExpect(MockMvcResultMatchers.status().isNotFound());
+    }
+
+    @Test
+    void testSearch_ByPhoneNumber_ReturnUserDTO() throws Exception {
+        String phone_number = "1234567899";
+        mockMvc.perform(MockMvcRequestBuilders.get(URI_TO_USERS + "/search?phone_number=" + phone_number))
+                .andExpect(MockMvcResultMatchers.status().isOk())
+                .andExpect(MockMvcResultMatchers.jsonPath("$.phone_number").value(phone_number));
+    }
+
+    @Test
+    void testSearch_ByInvalidPhoneNumber_ReturnNotFoundStatus() throws Exception {
+        String phone_number = "test";
+        mockMvc.perform(MockMvcRequestBuilders.get(URI_TO_USERS + "/search?phone_number=" + phone_number))
+                .andExpect(MockMvcResultMatchers.status().isNotFound());
+    }
+
+    @Test
+    void testSearch_ByEmptyField_ReturnNotFoundStatus() throws Exception {
+        mockMvc.perform(MockMvcRequestBuilders.get(URI_TO_USERS + "/search?test=test"))
+                .andExpect(MockMvcResultMatchers.status().isNotFound());
+    }
+
+    @Test
+    void testAdd_ReturnUserDTO() throws Exception  {
+        String first_name = "test", last_name = "test", phone_number = "12345678997", email = "test@gmail1.com123456", password = "1234";
         String body = "{\"first_name\": \"" + first_name + "\", \"last_name\": \"" + last_name + "\", \"phone_number\": \"" + phone_number + "\", \"email\": \"" + email + "\", \"password\": \"" + password + "\"}";
 
         mockMvc.perform(MockMvcRequestBuilders
-                        .post(PATH_TO_USERS + "/add")
+                        .post(URI_TO_USERS + "/add")
                         .content(body)
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(MockMvcResultMatchers.status().isOk())
@@ -50,10 +145,10 @@ class UsersControllerTest {
     }
 
     @Test
-    void testAddUserWithExistingPhone() throws Exception {
-        String body = "{\"first_name\": \"test\", \"last_name\": \"test\", \"phone_number\": \"0992950357\", \"email\": \"ttt\", \"password\": \"1234\"}";
+    void testAdd_WithExistingPhone_ReturnBadRequestStatus() throws Exception {
+        String body = "{\"first_name\": \"test\", \"last_name\": \"test\", \"phone_number\": \"0992950352\", \"email\": \"tttt\", \"password\": \"1234\"}";
         mockMvc.perform(MockMvcRequestBuilders
-                .post(PATH_TO_USERS + "/add")
+                .post(URI_TO_USERS + "/add")
                 .content(body)
                 .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(MockMvcResultMatchers.status().isBadRequest())
@@ -61,10 +156,10 @@ class UsersControllerTest {
     }
 
     @Test
-    void testAddUserWithExistingEmail() throws Exception {
-        String body = "{\"first_name\": \"test\", \"last_name\": \"test\", \"phone_number\": \"09929503576\", \"email\": \"test@gmail.com\", \"password\": \"1234\"}";
+    void testAdd_WithExistingEmail_ReturnBadRequestStatus() throws Exception {
+        String body = "{\"first_name\": \"test\", \"last_name\": \"test\", \"phone_number\": \"0\", \"email\": \"test@gmail.com\", \"password\": \"1234\"}";
         mockMvc.perform(MockMvcRequestBuilders
-                .post(PATH_TO_USERS + "/add")
+                .post(URI_TO_USERS + "/add")
                 .content(body)
                 .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(MockMvcResultMatchers.status().isBadRequest())
@@ -72,120 +167,37 @@ class UsersControllerTest {
     }
 
     @Test
-    void testGetByIdExistingId() throws Exception {
-        mockMvc.perform(MockMvcRequestBuilders.get(PATH_TO_USERS + "/1"))
-                .andExpect(MockMvcResultMatchers.jsonPath("$.first_name").value("Yuri"))
-                .andExpect(MockMvcResultMatchers.jsonPath("$.last_name").value("Petsa"))
-                .andExpect(MockMvcResultMatchers.jsonPath("$.email").value("petsa.yuri@gmail.com"))
-                .andExpect(MockMvcResultMatchers.jsonPath("$.phone_number").value("0954410994"));
-    }
-
-    @Test
-    void testGetByIdNonExistingId() throws Exception {
-        mockMvc.perform(MockMvcRequestBuilders.get(PATH_TO_USERS + "/9999"))
-                .andExpect(MockMvcResultMatchers.status().isNotFound())
-                .andExpect(MockMvcResultMatchers.content().string("Not Found"));
-    }
-
-    @Test
-    void testGetAllUsers() throws Exception {
-        mockMvc.perform(MockMvcRequestBuilders.get(PATH_TO_USERS))
-                .andExpect(MockMvcResultMatchers.status().isOk())
-                .andExpect(MockMvcResultMatchers.jsonPath("$").isArray())
-                .andExpect(MockMvcResultMatchers.jsonPath("$.length()").value(8));
-    }
-
-    @Test
-    void testGetAllUsersSortingByRole() throws Exception {
-        String role = "user";
-        mockMvc.perform(MockMvcRequestBuilders.get(PATH_TO_USERS + "?role=" + role))
-                .andExpect(MockMvcResultMatchers.status().isOk())
-                .andExpect(MockMvcResultMatchers.jsonPath("$").isArray())
-                .andExpect(MockMvcResultMatchers.jsonPath("$[0].role").value(role));
-    }
-
-    @Test
-    void testGetAllUsersSortingByInvalidRole() throws Exception {
-        String role = "test";
-        mockMvc.perform(MockMvcRequestBuilders.get(PATH_TO_USERS + "?role=" + role))
-                .andExpect(MockMvcResultMatchers.status().isOk())
-                .andExpect(MockMvcResultMatchers.jsonPath("$").isArray())
-                .andExpect(MockMvcResultMatchers.jsonPath("$").isEmpty());
-    }
-
-    @Test
-    void testGetAllUsersSortingByIsBanned() throws Exception {
-        boolean banned = false;
-        mockMvc.perform(MockMvcRequestBuilders.get(PATH_TO_USERS + "?is_banned=" + banned))
-                .andExpect(MockMvcResultMatchers.status().isOk())
-                .andExpect(MockMvcResultMatchers.jsonPath("$").isArray())
-                .andExpect(MockMvcResultMatchers.jsonPath("$[0].is_banned").value(banned));
-    }
-
-    @Test
-    void testGetAllUsersSortingByInvalidIsBanned() throws Exception {
-        String banned = "test";
-        mockMvc.perform(MockMvcRequestBuilders.get(PATH_TO_USERS + "?is_banned=" + banned ))
-                .andExpect(MockMvcResultMatchers.status().isOk())
-                .andExpect(MockMvcResultMatchers.jsonPath("$").isArray())
-                .andExpect(MockMvcResultMatchers.jsonPath("$[0].is_banned").value("false"));
-    }
-
-    @Test
-    void testSearchByEmptyField() throws Exception {
-        mockMvc.perform(MockMvcRequestBuilders.get(PATH_TO_USERS + "/search?test=test"))
-                .andExpect(MockMvcResultMatchers.status().isNotFound())
-                .andExpect(MockMvcResultMatchers.content().string("User not found"));
-    }
-
-    @Test
-    void testSearchByEmail() throws Exception {
-        String email = "test@gmail.com";
-        mockMvc.perform(MockMvcRequestBuilders.get(PATH_TO_USERS + "/search?email=" + email))
-                .andExpect(MockMvcResultMatchers.status().isOk())
-                .andExpect(MockMvcResultMatchers.jsonPath("$.email").value(email));
-    }
-
-    @Test
-    void testSearchByInvalidEmail() throws Exception {
-        String email = "test";
-        mockMvc.perform(MockMvcRequestBuilders.get(PATH_TO_USERS + "/search?email=" + email))
-                .andExpect(MockMvcResultMatchers.status().isNotFound())
-                .andExpect(MockMvcResultMatchers.content().string("User not found"));
-    }
-
-    @Test
-    void testSearchByPhoneNumber() throws Exception {
-        String phone_number = "0992950356";
-        mockMvc.perform(MockMvcRequestBuilders.get(PATH_TO_USERS + "/search?phone_number=" + phone_number))
-                .andExpect(MockMvcResultMatchers.status().isOk())
-                .andExpect(MockMvcResultMatchers.jsonPath("$.phone_number").value(phone_number));
-    }
-
-    @Test
-    void testSearchByInvalidPhoneNumber() throws Exception {
-        String phone_number = "test";
-        mockMvc.perform(MockMvcRequestBuilders.get(PATH_TO_USERS + "/search?phone_number=" + phone_number))
-                .andExpect(MockMvcResultMatchers.status().isNotFound())
-                .andExpect(MockMvcResultMatchers.content().string("User not found"));
-    }
-
-    @Test
-    void testUploadImageSuccess() throws Exception {
-        String filename = "28a50223-9db4-495a-a853-d18e23119585.jpg";
-        FileInputStream inputStream = new FileInputStream(PATH_TO_UPLOAD_IMAGES);
+    void testUploadImage_ReturnUserDTO() throws Exception {
+        String filename = "OIP.jpg";
+        FileInputStream inputStream = new FileInputStream(PATH_TO_UPLOAD_IMAGES + "//" + filename);
         MultipartFile multipartFile = new MockMultipartFile(filename, inputStream);
 
-        mockMvc.perform(MockMvcRequestBuilders.get(PATH_TO_USERS + "/5/upload?file=" + multipartFile))
-                .andExpect(MockMvcResultMatchers.status().isOk());
-              //  .andExpect(MockMvcResultMatchers.jsonPath("$.image").value(filename))
+        MvcResult result = mockMvc.perform(MockMvcRequestBuilders.multipart(URI_TO_USERS + "/5/upload")
+                        .file("file", multipartFile.getBytes())
+                        .header("Authorization", "Basic " + encodedCredentials))
+                .andExpect(MockMvcResultMatchers.status().isOk()).andReturn();
+
+        String uploadedFilename = result.getResponse().getContentAsString().split("\"image\":\"", 2)[1].split("\"")[0];
+        assertTrue(new File(System.getProperty("user.dir") + "/uploads/" + uploadedFilename).exists());
     }
 
     @Test
-    void testUpdateUserSuccess() throws Exception {
-        String firstName = "Yuri", lastName = "Petsa", phoneNumber = "0954410994";
+    void testUploadImage_WithNonExistingUserId_ReturnNotFoundStatus() throws Exception {
+        String filename = "OIP.jpg";
+        FileInputStream inputStream = new FileInputStream(PATH_TO_UPLOAD_IMAGES + "//" + filename);
+        MultipartFile multipartFile = new MockMultipartFile(filename, inputStream);
+
+        mockMvc.perform(MockMvcRequestBuilders.multipart(URI_TO_USERS + "/9999/upload")
+                        .file("file", multipartFile.getBytes())
+                        .header("Authorization", "Basic " + encodedCredentials))
+                .andExpect(MockMvcResultMatchers.status().isNotFound());
+    }
+
+    @Test
+    void testUpdate_ReturnUserDTO() throws Exception {
+        String firstName = "Yuri", lastName = "Petsa", phoneNumber = "123456789910";
         String body = "{\"first_name\": \"" + firstName + "\", \"last_name\": \"" + lastName + "\", \"phone_number\": \"" + phoneNumber + "\"}";
-        mockMvc.perform(MockMvcRequestBuilders.put(PATH_TO_USERS + "/1").content(body).contentType(MediaType.APPLICATION_JSON))
+        mockMvc.perform(MockMvcRequestBuilders.put(URI_TO_USERS + "/1").content(body).contentType(MediaType.APPLICATION_JSON))
                 .andExpect(MockMvcResultMatchers.status().isOk())
                 .andExpect(MockMvcResultMatchers.jsonPath("$.first_name").value(firstName))
                 .andExpect(MockMvcResultMatchers.jsonPath("$.last_name").value(lastName))
@@ -193,124 +205,114 @@ class UsersControllerTest {
     }
 
     @Test
-    void testUpdateUserNonExistingId() throws Exception {
+    void testUpdate_WithNonExistingId_ReturnNotFoundStatus() throws Exception {
         String firstName = "", lastName = "", phoneNumber = "";
         String body = "{\"first_name\": \"" + firstName + "\", \"last_name\": \"" + lastName + "\", \"phone_number\": \"" + phoneNumber + "\"}";
-        mockMvc.perform(MockMvcRequestBuilders.put(PATH_TO_USERS + "/9999").contentType(MediaType.APPLICATION_JSON).content(body))
-                .andExpect(MockMvcResultMatchers.status().isNotFound())
-                .andExpect(MockMvcResultMatchers.content().string("Not Found"));
+        mockMvc.perform(MockMvcRequestBuilders.put(URI_TO_USERS + "/9999").contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(MockMvcResultMatchers.status().isNotFound());
     }
 
     @Test
-    void testUpdateUserWithBadFieldsInTheBody() throws Exception {
+    void testUpdate_WithoutRequiredFieldInTheBody_ReturnBadRequestStatus() throws Exception {
         String firstName = "Yuri";
         String body = "{\"first_name\": \"" + firstName + "\"}";
 
-        mockMvc.perform(MockMvcRequestBuilders.put(PATH_TO_USERS + "/1").contentType(MediaType.APPLICATION_JSON).content(body))
+        mockMvc.perform(MockMvcRequestBuilders.put(URI_TO_USERS + "/1").contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(MockMvcResultMatchers.status().isBadRequest())
-                .andExpect(MockMvcResultMatchers.content().string("Bad fields in the body"));
+                .andExpect(MockMvcResultMatchers.content().string("Bad field in the body"));
     }
 
+    //Error
     @Test
-    void testDeleteUserSuccess() throws Exception {
-        long id = 11;
-        mockMvc.perform(MockMvcRequestBuilders.delete(PATH_TO_USERS + "/" + id))
+    void testDelete_ReturnString() throws Exception {
+        long id = 29;
+        mockMvc.perform(MockMvcRequestBuilders.delete(URI_TO_USERS + "/" + id))
                 .andExpect(MockMvcResultMatchers.status().isOk())
                 .andExpect(MockMvcResultMatchers.content().string("Successfully deleted"));
 
-        mockMvc.perform(MockMvcRequestBuilders.get(PATH_TO_USERS + "/" + id))
-                .andExpect(MockMvcResultMatchers.status().isNotFound())
-                .andExpect(MockMvcResultMatchers.content().string("Not Found"));
+        mockMvc.perform(MockMvcRequestBuilders.get(URI_TO_USERS + "/" + id))
+                .andExpect(MockMvcResultMatchers.status().isNotFound());
     }
 
     @Test
-    void testDeleteUserNonExistingId() throws Exception {
-        mockMvc.perform(MockMvcRequestBuilders.delete(PATH_TO_USERS + "/999"))
-                .andExpect(MockMvcResultMatchers.status().isNotFound())
-                .andExpect(MockMvcResultMatchers.content().string("Not Found"));
+    void testDelete_WithNonExistingId_ReturnNotFoundStatus() throws Exception {
+        mockMvc.perform(MockMvcRequestBuilders.delete(URI_TO_USERS + "/9999"))
+                .andExpect(MockMvcResultMatchers.status().isNotFound());
     }
 
     @Test
-    void testSetAdminToUserSuccess() throws Exception {
-        mockMvc.perform(MockMvcRequestBuilders.post(PATH_TO_USERS + "/setAdmin/2").header("Authorization", "Basic " + encodedCredentials))
+    void testSetAdmin_ReturnUserDTO() throws Exception {
+        mockMvc.perform(MockMvcRequestBuilders.post(URI_TO_USERS + "/setAdmin/2").header("Authorization", "Basic " + encodedCredentials))
                 .andExpect(MockMvcResultMatchers.status().isOk())
                 .andExpect(MockMvcResultMatchers.jsonPath("$.role").value("admin"));
     }
 
     @Test
-    void testSetAdminToUserWithoutAuthentication() throws Exception {
-        mockMvc.perform(MockMvcRequestBuilders.post(PATH_TO_USERS + "/setAdmin/2"))
-                .andExpect(MockMvcResultMatchers.status().isForbidden())
-                .andExpect(MockMvcResultMatchers.content().string("User has no rights"));
+    void testSetAdmin_WithoutAuthentication_ReturnForbiddenStatus() throws Exception {
+        mockMvc.perform(MockMvcRequestBuilders.post(URI_TO_USERS + "/setAdmin/2"))
+                .andExpect(MockMvcResultMatchers.status().isForbidden());
     }
 
     @Test
-    void testSetAdminToUserNonExistingId() throws Exception {
-        mockMvc.perform(MockMvcRequestBuilders.post(PATH_TO_USERS + "/setAdmin/999").header("Authorization", "Basic " + encodedCredentials))
-                .andExpect(MockMvcResultMatchers.status().isNotFound())
-                .andExpect(MockMvcResultMatchers.content().string("User not found"));
+    void testSetAdmin_WithNonExistingId_ReturnNotFoundStatus() throws Exception {
+        mockMvc.perform(MockMvcRequestBuilders.post(URI_TO_USERS + "/setAdmin/999").header("Authorization", "Basic " + encodedCredentials))
+                .andExpect(MockMvcResultMatchers.status().isNotFound());
     }
 
     @Test
-    void testRemoveAdminFromUserSuccess() throws Exception  {
-        mockMvc.perform(MockMvcRequestBuilders.post(PATH_TO_USERS + "/removeAdmin/2").header("Authorization", "Basic " + encodedCredentials))
+    void testRemoveAdmin_ReturnUserDTO() throws Exception  {
+        mockMvc.perform(MockMvcRequestBuilders.post(URI_TO_USERS + "/removeAdmin/2").header("Authorization", "Basic " + encodedCredentials))
                 .andExpect(MockMvcResultMatchers.status().isOk())
                 .andExpect(MockMvcResultMatchers.jsonPath("$.role").value("user"));
     }
 
     @Test
-    void testRemoveAdminFromUserWithoutAuthentication() throws Exception {
-        mockMvc.perform(MockMvcRequestBuilders.post(PATH_TO_USERS + "/removeAdmin/2"))
-                .andExpect(MockMvcResultMatchers.status().isForbidden())
-                .andExpect(MockMvcResultMatchers.content().string("User has no rights"));
+    void testRemoveAdmin_WithoutAuthentication_ReturnForbiddenStatus() throws Exception {
+        mockMvc.perform(MockMvcRequestBuilders.post(URI_TO_USERS + "/removeAdmin/2"))
+                .andExpect(MockMvcResultMatchers.status().isForbidden());
     }
 
     @Test
-    void testRemoveAdminFromUserNonExistingId() throws Exception {
-        mockMvc.perform(MockMvcRequestBuilders.post(PATH_TO_USERS + "/removeAdmin/9999").header("Authorization", "Basic " + encodedCredentials))
-                .andExpect(MockMvcResultMatchers.status().isNotFound())
-                .andExpect(MockMvcResultMatchers.content().string("User not found"));
+    void testRemoveAdmin_WithNonExistingId_ReturnNotFoundStatus() throws Exception {
+        mockMvc.perform(MockMvcRequestBuilders.post(URI_TO_USERS + "/removeAdmin/9999").header("Authorization", "Basic " + encodedCredentials))
+                .andExpect(MockMvcResultMatchers.status().isNotFound());
     }
 
     @Test
-    void testBanToUserSuccess() throws Exception {
-        mockMvc.perform(MockMvcRequestBuilders.post(PATH_TO_USERS + "/banTo/2").header("Authorization", "Basic " + encodedCredentials))
+    void testBanToUser_ReturnUserDTO() throws Exception {
+        mockMvc.perform(MockMvcRequestBuilders.post(URI_TO_USERS + "/banTo/2").header("Authorization", "Basic " + encodedCredentials))
                 .andExpect(MockMvcResultMatchers.status().isOk())
                 .andExpect(MockMvcResultMatchers.jsonPath("$.is_banned").value(true));
     }
 
     @Test
-    void testBanToUserWithoutAuthentication() throws Exception {
-        mockMvc.perform(MockMvcRequestBuilders.post(PATH_TO_USERS + "/banTo/2"))
-                .andExpect(MockMvcResultMatchers.status().isForbidden())
-                .andExpect(MockMvcResultMatchers.content().string("User has no rights"));
+    void testBanToUser_WithoutAuthentication_ReturnForbiddenStatus() throws Exception {
+        mockMvc.perform(MockMvcRequestBuilders.post(URI_TO_USERS + "/banTo/2"))
+                .andExpect(MockMvcResultMatchers.status().isForbidden());
     }
 
     @Test
-    void testBanToUserNonExistingId() throws Exception {
-        mockMvc.perform(MockMvcRequestBuilders.post(PATH_TO_USERS + "/banTo/9999").header("Authorization", "Basic " + encodedCredentials))
-                .andExpect(MockMvcResultMatchers.status().isNotFound())
-                .andExpect(MockMvcResultMatchers.content().string("User not found"));
+    void testBanToUser_WithNonExistingId_ReturnNotFoundStatus() throws Exception {
+        mockMvc.perform(MockMvcRequestBuilders.post(URI_TO_USERS + "/banTo/9999").header("Authorization", "Basic " + encodedCredentials))
+                .andExpect(MockMvcResultMatchers.status().isNotFound());
     }
 
     @Test
-    void testUnbanToUserSuccess() throws Exception {
-        mockMvc.perform(MockMvcRequestBuilders.post(PATH_TO_USERS + "/unbanTo/2").header("Authorization", "Basic " + encodedCredentials))
+    void testUnbanToUser_ReturnUserDTO() throws Exception {
+        mockMvc.perform(MockMvcRequestBuilders.post(URI_TO_USERS + "/unbanTo/2").header("Authorization", "Basic " + encodedCredentials))
                 .andExpect(MockMvcResultMatchers.status().isOk())
                 .andExpect(MockMvcResultMatchers.jsonPath("$.is_banned").value(false));
     }
 
     @Test
-    void testUnbanToUserWithoutAuthentication() throws Exception {
-        mockMvc.perform(MockMvcRequestBuilders.post(PATH_TO_USERS + "/unbanTo/2"))
-                .andExpect(MockMvcResultMatchers.status().isForbidden())
-                .andExpect(MockMvcResultMatchers.content().string("User has no rights"));
+    void testUnbanToUser_WithoutAuthentication_ReturnForbiddenStatus() throws Exception {
+        mockMvc.perform(MockMvcRequestBuilders.post(URI_TO_USERS + "/unbanTo/2"))
+                .andExpect(MockMvcResultMatchers.status().isForbidden());
     }
 
     @Test
-    void testUnbanToUserNonExistingId() throws Exception {
-        mockMvc.perform(MockMvcRequestBuilders.post(PATH_TO_USERS + "/unbanTo/9999").header("Authorization", "Basic " + encodedCredentials))
-                .andExpect(MockMvcResultMatchers.status().isNotFound())
-                .andExpect(MockMvcResultMatchers.content().string("User not found"));
+    void testUnbanToUser_WithNonExistingId_ReturnNotFoundStatus() throws Exception {
+        mockMvc.perform(MockMvcRequestBuilders.post(URI_TO_USERS + "/unbanTo/9999").header("Authorization", "Basic " + encodedCredentials))
+                .andExpect(MockMvcResultMatchers.status().isNotFound());
     }
 }

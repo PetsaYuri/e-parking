@@ -32,7 +32,7 @@ public class TransactionsService {
     }
 
     public Transactions add(Transactions transaction, String titlePromoCode)   {
-        PromoCodes promoCode = promocodesService.getPromocode(titlePromoCode);
+        PromoCodes promoCode = promocodesService.getByTitle(titlePromoCode);
         Transactions newTransaction = new Transactions(transaction.getUserName(), transaction.getUserPhoneNumber(), transaction.getCarNumbers(),
                 transaction.getCarColor(), transaction.getPrice(), transaction.getParkingId(), transaction.getParkingEnds(), transaction.getUser(), transaction.getCar(),
                 titlePromoCode, transaction.getPriceWithPromoCode(), promoCode);

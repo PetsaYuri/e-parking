@@ -17,7 +17,7 @@ import java.util.UUID;
 public class PromoCodes {
 
   public PromoCodes(int count, int amount, int days) {
-      this.title = UUID.randomUUID().toString();
+      this.title = UUID.randomUUID().toString().substring(0, 6);
       this.count = count;
       this.amount = amount;
       this.days = days;

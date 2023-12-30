@@ -1,9 +1,11 @@
 package API.eparking.Services;
 
+import API.eparking.DTO.ReviewDTO;
 import API.eparking.Models.Reviews;
 import API.eparking.Models.Users;
 import API.eparking.Repositories.ReviewsRepository;
 import API.eparking.Repositories.UsersRepository;
+import jakarta.persistence.EntityNotFoundException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
@@ -23,38 +25,43 @@ public class ReviewsService {
         this.usersRepository = usersRepository;
     }
 
-    public List<Reviews> getAll(String grade)   {
-        try {
-            return Integer.valueOf(grade) == 0 ? reviewsRepository.findAll(Sort.by("id"))
-                    : reviewsRepository.findByGrade(Integer.parseInt(grade));
-        }   catch (NumberFormatException ex)    {
-            return reviewsRepository.findAll(Sort.by("id"));
-        }
-
+    public Reviews getById(Long id) {
+        return reviewsRepository.getReferenceById(id);
     }
 
-    public Reviews create(Reviews review, String email)  {
+    public List<Reviews> getAll(String grade)   {
+            return Integer.parseInt(grade) == 0 ? reviewsRepository.findAll(Sort.by("id"))
+                    : reviewsRepository.findByGrade(Integer.parseInt(grade));
+    }
+
+    public Reviews create(ReviewDTO reviewDTO, String email)  {
         Users user = usersRepository.findByEmail(email);
         if (user == null) {
             return null;
         }
-        Reviews newReview = new Reviews(review.getBody(), review.getGrade(), user);
+        Reviews newReview = new Reviews(reviewDTO.body(), reviewDTO.grade(), user);
         return reviewsRepository.save(newReview);
     }
 
-    public Reviews update(Reviews review, Reviews reviewFromDB)   {
-        if(review.getBody() != null)    {
-            reviewFromDB.setBody(review.getBody());
+    public Reviews update(ReviewDTO reviewDTO, Long id)   {
+        Reviews review = reviewsRepository.getReferenceById(id);
+        if(reviewDTO.body() != null)    {
+            review.setBody(reviewDTO.body());
         }
 
-        if(review.getGrade() != 0)   {
-            reviewFromDB.setGrade(review.getGrade());
+        if(reviewDTO.grade() != 0)   {
+            review.setGrade(reviewDTO.grade());
         }
-        return reviewsRepository.save(reviewFromDB);
+        return reviewsRepository.save(review);
     }
 
-    public boolean delete(Reviews review)   {
-        reviewsRepository.delete(review);
-        return true;
+    public boolean delete(Long id) {
+        if (reviewsRepository.existsById(id)) {
+            Reviews review = reviewsRepository.getReferenceById(id);
+            reviewsRepository.delete(review);
+            return !reviewsRepository.existsById(id);
+        }   else {
+            throw new EntityNotFoundException();
+        }
     }
 }

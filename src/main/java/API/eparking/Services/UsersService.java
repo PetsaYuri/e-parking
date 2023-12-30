@@ -1,9 +1,6 @@
 package API.eparking.Services;
 
-import API.eparking.Exceptions.Users.EmailAlreadyExistsException;
-import API.eparking.Exceptions.Users.PhoneAlreadyExistsException;
-import API.eparking.Exceptions.Users.UserHasNoRightsException;
-import API.eparking.Exceptions.Users.UserNotFoundException;
+import API.eparking.Exceptions.Users.*;
 import API.eparking.Models.Cars;
 import API.eparking.Models.Users;
 import API.eparking.Repositories.UsersRepository;
@@ -31,7 +28,7 @@ public class UsersService {
         this.transactionsService = transactionsService;
     }
 
-    public UserDTO update(Long id, UserDTO updatedUser) throws EntityNotFoundException, NullPointerException {
+    public Users update(Long id, UserDTO updatedUser) throws EntityNotFoundException, NullPointerException {
         Users currentUser = usersRepository.getReferenceById(id);
         if (!updatedUser.first_name().isEmpty()) {
             currentUser.setFirst_name(updatedUser.first_name());
@@ -48,9 +45,7 @@ public class UsersService {
         if (updatedUser.cars() != null)   {
             currentUser.setCars(updatedUser.cars());
         }
-        usersRepository.save(currentUser);
-        return new UserDTO(currentUser.getPassword(), currentUser.getEmail(), currentUser.getPhoneNumber(), currentUser.getFirst_name(), currentUser.getLast_name(),
-                currentUser.getImage(), currentUser.getRole(), currentUser.isBanned(), currentUser.getCars(), currentUser.getReviews());
+        return usersRepository.save(currentUser);
     }
 
     public List<UserDTO> getAll(String role, String banned) {
@@ -66,16 +61,15 @@ public class UsersService {
         }
     }
 
-    public UserDTO getByField(String email, String phone_number) throws UserNotFoundException, NullPointerException   {
-        Users user;
+    public List<Users> getAll() {
+        return usersRepository.findAll();
+    }
+
+    public Users getByField(String email, String phone_number) throws UserNotFoundException {
         if (email != null)  {
-            user = usersRepository.findByEmail(email);
-            return new UserDTO(user.getPassword(), user.getEmail(), user.getPhoneNumber(), user.getFirst_name(), user.getLast_name(), user.getImage(),
-                    user.getRole(), user.isBanned(), user.getCars(), user.getReviews());
+            return usersRepository.findByEmail(email);
         }   else if (phone_number != null) {
-            user = usersRepository.findByPhoneNumber(phone_number);
-            return new UserDTO(user.getPassword(), user.getEmail(), user.getPhoneNumber(), user.getFirst_name(), user.getLast_name(), user.getImage(),
-                    user.getRole(), user.isBanned(), user.getCars(), user.getReviews());
+           return usersRepository.findByPhoneNumber(phone_number);
         }
         throw new UserNotFoundException();
     }
@@ -86,15 +80,16 @@ public class UsersService {
 
     public boolean delete(Long id) throws EntityNotFoundException {
         Users user = usersRepository.getReferenceById(id);
-        if (user.getPassword() != null) {
+
+        if (!user.getTransactions().isEmpty()) {
             transactionsService.deleteUser(user);
-            usersRepository.delete(user);
-            return !usersRepository.existsById(user.getId());
         }
-        return false;
+
+        usersRepository.delete(user);
+        return !usersRepository.existsById(user.getId());
     }
 
-    public UserDTO add(UserDTO user) throws EmailAlreadyExistsException, PhoneAlreadyExistsException {
+    public Users add(UserDTO user) throws EmailAlreadyExistsException, PhoneAlreadyExistsException {
         Users existsEmail = usersRepository.findByEmail(user.email());
         Users existsPhone = usersRepository.findByPhoneNumber(user.phone_number());
 
@@ -109,86 +104,113 @@ public class UsersService {
         BCryptPasswordEncoder bCrypt = new BCryptPasswordEncoder();
         UserDTO newDtoUser = user.withPassword(bCrypt.encode(user.password()));
         Users newUser = new Users(newDtoUser.first_name(), newDtoUser.last_name(), newDtoUser.phone_number(), newDtoUser.email(), newDtoUser.password());
+
         Users savedUser = usersRepository.save(newUser);
 
-        if (savedUser.getId() == 1)   {
+        /*if (savedUser.getId() == 1)   {
             newUser.setRole("owner");
+        }*/
+        return savedUser;
+    }
+
+    public Users setCarToUser(Users user, Cars car) throws EntityNotFoundException {
+        if (usersRepository.existsById(user.getId())) {
+            List<Cars> cars = user.getCars();
+            cars.add(car);
+            user.setCars(cars);
+            return usersRepository.save(user);
+        }   else {
+            throw new EntityNotFoundException();
         }
-        return new UserDTO(savedUser.getPassword(), savedUser.getEmail(), savedUser.getPhoneNumber(), savedUser.getFirst_name(), savedUser.getLast_name(), savedUser.getImage(),
-                savedUser.getRole(), user.is_banned(), new ArrayList<>(), new ArrayList<>());
     }
 
-    public Users setCarToUser(Users user, Cars car)   {
-        List<Cars> cars = user.getCars();
-        cars.add(car);
-        user.setCars(cars);
-        return usersRepository.save(user);
+    public Users deleteUserCar(Users user, Cars car) throws UserNotHaveThisCarException, EntityNotFoundException {
+        String email = SecurityContextHolder.getContext().getAuthentication().getName();
+        String role = findByEmail(email).getRole();
+        if (usersRepository.existsById(user.getId())) {
+            if (user.getCars().contains(car) || role.equals("admin") || role.equals("owner")) {
+                List<Cars> cars = user.getCars();
+                cars.remove(car);
+                user.setCars(cars);
+
+                return usersRepository.save(user);
+            }
+            throw new UserNotHaveThisCarException();
+        }   else {
+            throw new EntityNotFoundException();
+        }
     }
 
-    public Users deleteTheUsersCar(Users user, Cars car)  {
-        List<Cars> cars = user.getCars();
-        cars.remove(car);
-        user.setCars(cars);
-        return usersRepository.save(user);
+    public Users findByEmail(String email) throws EntityNotFoundException {
+        Users user = usersRepository.findByEmail(email);
+        if (user == null)  {
+            throw new EntityNotFoundException();
+        }
+        return user;
     }
 
-    public Users findById(long id)  {
-        return usersRepository.getReferenceById(id);
-    }
-
-    public Users findByEmail(String email)  {
-        return usersRepository.findByEmail(email);
-    }
-
-    public UserDTO setAvatar(Users user, String filename)    {
-        user.setImage(filename);
-        usersRepository.save(user);
-        return new UserDTO(user.getPassword(), user.getEmail(), user.getPhoneNumber(), user.getFirst_name(), user.getLast_name(), user.getImage(), user.getRole(),
-                user.isBanned(), user.getCars(), user.getReviews());
-    }
-
-    public UserDTO setRoleAdmin(Long id) throws EntityNotFoundException, UserHasNoRightsException {
+    public Users setAvatar(Long id, String filename) throws EntityNotFoundException   {
         Users user = usersRepository.getReferenceById(id);
+        if (user == null)   {
+            throw new EntityNotFoundException();
+        }
+
+        user.setImage(filename);
+        return usersRepository.save(user);
+    }
+
+    public Users setRoleAdmin(Long id) throws EntityNotFoundException, UserHasNoRightsException {
+        Users user = usersRepository.getReferenceById(id);
+
+        if (user == null)   {
+            throw new EntityNotFoundException();
+        }
+
         if (SecurityContextHolder.getContext().getAuthentication().getAuthorities().toString().equals("[ROLE_owner]")) {
             user.setRole("admin");
-            usersRepository.save(user);
-            return new UserDTO(user.getPassword(), user.getEmail(), user.getPhoneNumber(), user.getFirst_name(), user.getLast_name(), user.getImage(),
-                    user.getRole(), user.isBanned(), user.getCars(), user.getReviews());
+            return usersRepository.save(user);
         }
         throw new UserHasNoRightsException();
     }
 
-    public UserDTO removeAdmin(Long id)  throws EntityNotFoundException, UserHasNoRightsException {
+    public Users removeAdmin(Long id)  throws EntityNotFoundException, UserHasNoRightsException {
         Users user = usersRepository.getReferenceById(id);
+
+        if (user == null)   {
+            throw new EntityNotFoundException();
+        }
+
         if (SecurityContextHolder.getContext().getAuthentication().getAuthorities().toString().equals("[ROLE_owner]")) {
             user.setRole("user");
-            usersRepository.save(user);
-            return new UserDTO(user.getPassword(), user.getEmail(), user.getPhoneNumber(), user.getFirst_name(), user.getLast_name(), user.getImage(),
-                    user.getRole(), user.isBanned(), user.getCars(), user.getReviews());
+            return usersRepository.save(user);
         }
         throw new UserHasNoRightsException();
     }
 
-    public UserDTO banTo(Long id) throws EntityNotFoundException, UserHasNoRightsException {
+    public Users banTo(Long id) throws EntityNotFoundException, UserHasNoRightsException {
         Users user = usersRepository.getReferenceById(id);
+        if (user == null)   {
+            throw new EntityNotFoundException();
+        }
+
         if (SecurityContextHolder.getContext().getAuthentication().getAuthorities().toString().equals("[ROLE_owner]") ||
                 SecurityContextHolder.getContext().getAuthentication().getAuthorities().toString().equals("[ROLE_admin]")) {
             user.setBanned(true);
-            usersRepository.save(user);
-            return new UserDTO(user.getPassword(), user.getEmail(), user.getPhoneNumber(), user.getFirst_name(), user.getLast_name(), user.getImage(),
-                    user.getRole(), user.isBanned(), user.getCars(), user.getReviews());
+            return usersRepository.save(user);
         }
         throw new UserHasNoRightsException();
     }
 
-    public UserDTO unbanTo(Long id) throws EntityNotFoundException, UserHasNoRightsException {
+    public Users unbanTo(Long id) throws EntityNotFoundException, UserHasNoRightsException {
         Users user = usersRepository.getReferenceById(id);
+        if (user == null) {
+            throw new EntityNotFoundException();
+        }
+
         if (SecurityContextHolder.getContext().getAuthentication().getAuthorities().toString().equals("[ROLE_owner]") ||
                 SecurityContextHolder.getContext().getAuthentication().getAuthorities().toString().equals("[ROLE_admin]")) {
             user.setBanned(false);
-            usersRepository.save(user);
-            return new UserDTO(user.getPassword(), user.getEmail(), user.getPhoneNumber(), user.getFirst_name(), user.getLast_name(), user.getImage(),
-                    user.getRole(), user.isBanned(), user.getCars(), user.getReviews());
+            return usersRepository.save(user);
         }
         throw new UserHasNoRightsException();
     }

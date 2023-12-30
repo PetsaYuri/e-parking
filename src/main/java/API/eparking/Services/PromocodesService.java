@@ -1,13 +1,15 @@
 package API.eparking.Services;
 
+import API.eparking.DTO.PromocodeDTO;
+import API.eparking.Exceptions.PromoCodes.PromoCodeWithoutRequiredFieldInTheBodyException;
 import API.eparking.Models.PromoCodes;
 import API.eparking.Repositories.PromocodesRepository;
+import jakarta.persistence.EntityNotFoundException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
 
 import java.sql.Timestamp;
-import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.List;
 import java.util.UUID;
@@ -25,12 +27,12 @@ public class PromocodesService {
         this.transactionsService = transactionsService;
     }
 
-    public List<PromoCodes> getAll(String title, String available)    {
-        if (title != null)  {
-            List<PromoCodes> promoCodes = new ArrayList<>();
-            promoCodes.add(promocodesRepository.findByTitle(title)) ;
-            return promoCodes;
-        }   else if (available != null)  {
+    public PromoCodes getById(Long id)  {
+        return promocodesRepository.getReferenceById(id);
+    }
+
+    public List<PromoCodes> getAll(String available)    {
+        if (available != null)  {
             return Boolean.parseBoolean(available)
                     ? promocodesRepository.findByEndsAfter(Timestamp.from(Calendar.getInstance().toInstant()))
                     : promocodesRepository.findByEndsBefore(Timestamp.from(Calendar.getInstance().toInstant()));
@@ -38,37 +40,61 @@ public class PromocodesService {
         return promocodesRepository.findAll();
     }
 
-    public PromoCodes create(PromoCodes promoCode)  {
+    public PromoCodes create(PromocodeDTO promoCode) throws PromoCodeWithoutRequiredFieldInTheBodyException {
         PromoCodes newPromocode;
-        if (promoCode.getPercent() != 0) {
-            newPromocode = new PromoCodes(promoCode.getCount(), promoCode.getPercent(), promoCode.getDays());
+        if (promoCode.percent() != 0) {
+            double percent = promoCode.percent();
+            newPromocode = new PromoCodes(promoCode.count(), percent, promoCode.days());
             return promocodesRepository.save(newPromocode);
-        }   else if (promoCode.getAmount() != 0)  {
-            newPromocode = new PromoCodes(promoCode.getCount(), promoCode.getAmount(), promoCode.getDays());
+        }   else if (promoCode.amount() != 0)  {
+            newPromocode = new PromoCodes(promoCode.count(), promoCode.amount(), promoCode.days());
             return promocodesRepository.save(newPromocode);
         }
-        return null;
+        throw new PromoCodeWithoutRequiredFieldInTheBodyException();
     }
 
-    public PromoCodes updateCode(PromoCodes promoCode)  {
+    public PromoCodes updateCode(Long id)  {
+        PromoCodes promoCode = promocodesRepository.getReferenceById(id);
         if (promocodesRepository.existsById(promoCode.getId()))    {
             String newCode = UUID.randomUUID().toString().substring(0, 6);
             promoCode.setTitle(newCode);
             return promocodesRepository.save(promoCode);
         }
-        return null;
+        throw new EntityNotFoundException();
     }
 
-    public Boolean delete(PromoCodes promoCode) {
+    public PromoCodes edit(Long id, PromocodeDTO promocodeDTO) {
+        PromoCodes promocode = promocodesRepository.getReferenceById(id);
+        if (promocodeDTO.count() > 0) {
+            promocode.setCount(promocodeDTO.count());
+        }
+
+        if (promocodeDTO.amount() > 0) {
+            promocode.setAmount(promocodeDTO.amount());
+            promocode.setPercent(0);
+        }   else if (promocodeDTO.percent() > 0) {
+            promocode.setPercent(promocodeDTO.percent());
+            promocode.setAmount(0);
+        }
+
+        if (promocodeDTO.days() > 0 && Calendar.getInstance().toInstant().isBefore(promocode.getEnds().toInstant())) {
+            int seconds = promocodeDTO.days() * 24 * 60 * 60;
+            promocode.setEnds(Timestamp.from(promocode.getEnds().toInstant().plusSeconds(seconds)));
+        }
+        return promocodesRepository.save(promocode);
+    }
+
+    public Boolean delete(Long id) {
+        PromoCodes promoCode = promocodesRepository.getReferenceById(id);
         if (promocodesRepository.existsById(promoCode.getId()))    {
             transactionsService.deletePromoCode(promoCode);
             promocodesRepository.delete(promoCode);
             return true;
         }
-        return false;
+        throw new EntityNotFoundException();
     }
 
-    public PromoCodes getPromocode(String title)  {
+    public PromoCodes getByTitle(String title)  {
         return promocodesRepository.findByTitle(title);
     }
 

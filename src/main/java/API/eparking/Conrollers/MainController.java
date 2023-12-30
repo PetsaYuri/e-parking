@@ -30,10 +30,12 @@ public class MainController {
     }
 
     @PostMapping("/signup")
-    public ResponseEntity<HashMap> signUp(@RequestBody UserDTO user)   {
+    public ResponseEntity<HashMap> signUp(@RequestBody UserDTO userDTO)   {
         try {
+            Users user = usersService.add(userDTO);
             HashMap<String, UserDTO> hashMap = new HashMap<>();
-            hashMap.put("user", usersService.add(user));
+            hashMap.put("user", new UserDTO(user.getPassword(), user.getEmail(), user.getPhoneNumber(), user.getFirst_name(),
+                    user.getLast_name(), user.getImage(), user.getRole(), user.isBanned(), user.getCars(), user.getReviews()));
             return ResponseEntity.ok().body(hashMap);
         }   catch (EmailAlreadyExistsException ex)   {
             HashMap<String, String> hashMap = new HashMap<>();
